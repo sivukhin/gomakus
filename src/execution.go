@@ -2,12 +2,14 @@ package src
 
 import (
 	"fmt"
+	"go/token"
 	"sort"
 	"strconv"
 	"strings"
 )
 
 type (
+	VarId int
 	// ExecutionPoint uniquely identifies code point within single function
 	ExecutionPoint int
 	// ExecutionTransition represents single operation which change IR state
@@ -17,8 +19,13 @@ type (
 	}
 	// Execution represents control flow graph with all possible transitions of the single function
 	Execution struct {
-		RootPoint   ExecutionPoint
-		Transitions map[ExecutionPoint][]ExecutionTransition
+		RootPoint            ExecutionPoint
+		Transitions          map[ExecutionPoint][]ExecutionTransition
+		SourceCodeReferences SourceCodeReferences
+	}
+	SourceCodeReferences struct {
+		Enabled    bool
+		References map[ExecutionPoint]token.Position
 	}
 )
 
@@ -38,12 +45,27 @@ func (v VarEmbed) String() string {
 func (e Execution) String() string {
 	var s strings.Builder
 	s.WriteString(fmt.Sprintf("execution (%v):\n", e.RootPoint))
-	transitions := make([]ExecutionPoint, 0)
+	points := make([]ExecutionPoint, 0)
 	for point := range e.Transitions {
-		transitions = append(transitions, point)
+		points = append(points, point)
 	}
-	sort.Slice(transitions, func(i, j int) bool { return transitions[i] < transitions[j] })
-	for _, point := range transitions {
+	sort.Slice(points, func(i, j int) bool {
+		refI := e.SourceCodeReferences.References[points[i]]
+		refJ := e.SourceCodeReferences.References[points[j]]
+		if refI.Filename != refJ.Filename {
+			return refI.Filename < refJ.Filename
+		} else if refI.Line != refJ.Line {
+			return refI.Line < refJ.Line
+		} else if refI.Column != refJ.Column {
+			return refI.Column < refJ.Column
+		} else {
+			return points[i] < points[j]
+		}
+	})
+	for _, point := range points {
+		if ref, ok := e.SourceCodeReferences.References[point]; ok {
+			s.WriteString(fmt.Sprintf("%v(%v[%v])::\t", ref.Filename, ref.Line, ref.Column))
+		}
 		s.WriteString(fmt.Sprintf("  %v: ", point))
 		for _, next := range e.Transitions[point] {
 			s.WriteString(fmt.Sprintf("%v:%T%+v ", next.ToPoint, next.Operation, next.Operation))

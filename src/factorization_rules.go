@@ -4,7 +4,7 @@ import (
 	"slices"
 	"sort"
 
-	"go-append-check/utils"
+	"gomakus/utils"
 )
 
 // FactorizationRules stores all useful paths for every variable in single function

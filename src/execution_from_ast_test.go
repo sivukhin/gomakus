@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"go-append-check/utils"
+	"gomakus/utils"
 )
 
 func TestIfDeconstruction(t *testing.T) {

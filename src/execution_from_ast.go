@@ -5,7 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 
-	"go-append-check/utils"
+	"gomakus/utils"
 )
 
 // deconstructIf analyze chain of if / else if / else blocks and return flat list representing single chain (without analyzing nested conditions)
@@ -62,15 +62,24 @@ func deconstructDecl(stmt ast.Stmt) ([]string, []ast.Expr, bool) {
 	return nil, nil, false
 }
 
-func executionFromVarComposition(builder ExecutionBuilder, varSelector VarSelector, varCompositions VarComposition) ExecutionBuilder {
+func executionFromVarComposition(
+	fset *token.FileSet,
+	node ast.Node,
+	builder ExecutionBuilder,
+	varSelector VarSelector,
+	varCompositions VarComposition,
+) ExecutionBuilder {
 	if len(varCompositions) == 0 {
-		builder = builder.ApplyNext(AssignSelectorOp{FromSelector: VarSelector{VarId: BlankVarId}, ToSelector: varSelector})
+		builder = builder.ApplyNextWithRef(AssignSelectorOp{
+			FromSelector: VarSelector{VarId: BlankVarId},
+			ToSelector:   varSelector,
+		}, fset.Position(node.Pos()))
 	}
 	for _, assignOp := range varCompositions {
-		builder = builder.ApplyNext(AssignSelectorOp{
+		builder = builder.ApplyNextWithRef(AssignSelectorOp{
 			FromSelector: assignOp.VarSelector,
 			ToSelector:   VarSelector{VarId: varSelector.VarId, Selector: append(varSelector.Selector, assignOp.Path...)},
-		})
+		}, fset.Position(node.Pos()))
 	}
 	return builder
 }
@@ -94,8 +103,8 @@ func executionFromExpr(
 		var varCompositions []VarComposition
 		builder, varCompositions = executionFromExpr(builder, scopes, fset, e.X, 1)
 		utils.Assertf(len(varCompositions) == 1, "selector must be applied to single value")
-		for _, varComposition := range varCompositions[0] {
-			if selected, ok := varComposition.Select(e.Sel.Name); ok {
+		for _, varEmbed := range varCompositions[0] {
+			if selected, ok := varEmbed.Select(e.Sel.Name); ok {
 				return builder, []VarComposition{{selected}}
 			}
 		}
@@ -151,30 +160,30 @@ func executionFromExpr(
 			outVars = append(outVars, varId)
 			outVarCompositions = append(outVarCompositions, VarComposition{{VarSelector: VarSelector{VarId: varId}}})
 		}
-		builder = builder.ApplyNext(UseSelectorsOp{
+		builder = builder.ApplyNextWithRef(UseSelectorsOp{
 			FuncId:  funcId,
 			Inputs:  inVarCompositions,
 			Outputs: outVars,
-		})
+		}, fset.Position(expr.Pos()))
 		return builder, outVarCompositions
 	case
-		nil,
-		*ast.StructType,
-		*ast.Ellipsis,
-		*ast.BasicLit,
-		*ast.FuncLit,
-		*ast.IndexExpr,
-		*ast.IndexListExpr,
-		*ast.TypeAssertExpr,
-		*ast.StarExpr,
-		*ast.UnaryExpr,
-		*ast.BinaryExpr,
-		*ast.KeyValueExpr,
-		*ast.ArrayType,
-		*ast.FuncType,
-		*ast.InterfaceType,
-		*ast.MapType,
-		*ast.ChanType:
+			nil,
+			*ast.StructType,
+			*ast.Ellipsis,
+			*ast.BasicLit,
+			*ast.FuncLit,
+			*ast.IndexExpr,
+			*ast.IndexListExpr,
+			*ast.TypeAssertExpr,
+			*ast.StarExpr,
+			*ast.UnaryExpr,
+			*ast.BinaryExpr,
+			*ast.KeyValueExpr,
+			*ast.ArrayType,
+			*ast.FuncType,
+			*ast.InterfaceType,
+			*ast.MapType,
+			*ast.ChanType:
 		return builder, blanks
 	}
 	panic(fmt.Errorf("unexpected expression"))
@@ -212,7 +221,7 @@ func executionFromStmt(
 	case *ast.IfStmt:
 		inits, bodies := deconstructIf(fset, s)
 		scopes = scopes.PushScope() // all init stmts works in the separate scope, different from the external
-		afterIf := builder.AcquirePoint()
+		afterIf := builder.AcquirePointWithRef(fset.Position(s.End()))
 		for i, init := range inits {
 			if init != nil {
 				builder = executionFromStmt(builder, scopes, fset, init, returnOutputs)
@@ -239,10 +248,16 @@ func executionFromStmt(
 		beforeFor := builder
 		// create key, value in scope and reset them in IR
 		if s.Key != nil {
-			builder = builder.ApplyNext(AssignVarOp{ToVarId: scopes.CreateVar(s.Key.(*ast.Ident).Name), FromVarId: BlankVarId})
+			builder = builder.ApplyNextWithRef(AssignSelectorOp{
+				ToSelector:   VarSelector{VarId: scopes.CreateVar(s.Key.(*ast.Ident).Name)},
+				FromSelector: VarSelector{VarId: BlankVarId},
+			}, fset.Position(s.Key.Pos()))
 		}
 		if s.Value != nil {
-			builder = builder.ApplyNext(AssignVarOp{ToVarId: scopes.CreateVar(s.Value.(*ast.Ident).Name), FromVarId: BlankVarId})
+			builder = builder.ApplyNextWithRef(AssignSelectorOp{
+				ToSelector:   VarSelector{VarId: scopes.CreateVar(s.Value.(*ast.Ident).Name)},
+				FromSelector: VarSelector{VarId: BlankVarId},
+			}, fset.Position(s.Value.Pos()))
 		}
 		builder = executionFromStmt(builder, scopes, fset, s.Body, returnOutputs)
 		builder.ConnectTo(beforeFor.CurrentPoint)
@@ -262,7 +277,7 @@ func executionFromStmt(
 			}
 			for i, name := range names {
 				varId := scopes.CreateVar(name)
-				builder = executionFromVarComposition(builder, VarSelector{VarId: varId}, varCompositions[i])
+				builder = executionFromVarComposition(fset, s, builder, VarSelector{VarId: varId}, varCompositions[i])
 			}
 		} else {
 			assign := stmt.(*ast.AssignStmt)
@@ -289,14 +304,14 @@ func executionFromStmt(
 				if len(lhsVarComposition[0][0].Path) != 0 {
 					continue
 				}
-				builder = executionFromVarComposition(builder, lhsVarComposition[0][0].VarSelector, varCompositions[i])
+				builder = executionFromVarComposition(fset, s, builder, lhsVarComposition[0][0].VarSelector, varCompositions[i])
 			}
 		}
 		return builder
 	case *ast.SwitchStmt:
 		scopes = scopes.PushScope()
 		builder = executionFromStmt(builder, scopes, fset, s.Init, returnOutputs)
-		afterSwitch := builder.AcquirePoint()
+		afterSwitch := builder.AcquirePointWithRef(fset.Position(s.End()))
 		for _, clause := range s.Body.List {
 			caseClause := clause.(*ast.CaseClause)
 			executionFromStmtList(builder, scopes.PushScope(), fset, caseClause.Body, returnOutputs).ConnectTo(afterSwitch.CurrentPoint)
@@ -309,7 +324,7 @@ func executionFromStmt(
 			utils.Assertf(len(assign.Lhs) == 1, "type switch assignment must have single variable")
 			scopes.CreateVar(assign.Lhs[0].(*ast.Ident).Name)
 		}
-		afterSwitch := builder.AcquirePoint()
+		afterSwitch := builder.AcquirePointWithRef(fset.Position(s.End()))
 		for _, clause := range s.Body.List {
 			caseClause := clause.(*ast.CaseClause)
 			executionFromStmtList(builder, scopes.PushScope(), fset, caseClause.Body, returnOutputs).ConnectTo(afterSwitch.CurrentPoint)
@@ -331,20 +346,20 @@ func executionFromStmt(
 		for i := range varCompositions {
 			varId := scopes.NewVarId()
 			varIds = append(varIds, varId)
-			builder = executionFromVarComposition(builder, VarSelector{VarId: varId}, varCompositions[i])
+			builder = executionFromVarComposition(fset, s, builder, VarSelector{VarId: varId}, varCompositions[i])
 		}
-		return builder.ApplyNext(ReturnVarsOp{VarIds: varIds})
+		return builder.ApplyNextWithRef(ReturnVarsOp{VarIds: varIds}, fset.Position(s.Pos()))
 	case *ast.ExprStmt:
 		builder, _ = executionFromExpr(builder, scopes, fset, s.X, 0)
 		return builder
 	case
-		*ast.BranchStmt, /* break / continue / goto */
-		*ast.DeferStmt,
-		*ast.EmptyStmt,
-		*ast.GoStmt,
-		*ast.IncDecStmt,
-		*ast.SelectStmt,
-		*ast.SendStmt:
+			*ast.BranchStmt, /* break / continue / goto */
+			*ast.DeferStmt,
+			*ast.EmptyStmt,
+			*ast.GoStmt,
+			*ast.IncDecStmt,
+			*ast.SelectStmt,
+			*ast.SendStmt:
 		return builder
 	}
 	panic(fmt.Errorf("unexpected statement found: %T (%+v)", stmt, stmt))
@@ -355,7 +370,9 @@ func executionFromFunc(
 	fset *token.FileSet,
 	funcDecl *ast.FuncDecl,
 ) Execution {
-	builder := NewExecutionBuilder()
+	builder := NewExecutionBuilder(true)
+	builder.AssignRef(builder.CurrentPoint, fset.Position(funcDecl.Pos()))
+
 	scopes = scopes.PushScope()
 	if funcDecl.Type.Params != nil {
 		for _, params := range funcDecl.Type.Params.List {

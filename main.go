@@ -8,7 +8,7 @@ import (
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/singlechecker"
 
-	"go-append-check/src"
+	"gomakus/src"
 )
 
 var Analyzer = &analysis.Analyzer{

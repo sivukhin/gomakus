@@ -1,8 +1,20 @@
 package src
 
+const (
+	PrevGen GenChangeType = -1
+	SameGen GenChangeType = 0
+	NextGen GenChangeType = +1
+)
+
 type (
-	FuncId int
-	Path   []string
+	FuncId        int
+	GenChangeType int
+	VarGen        struct {
+		Id  VarId
+		Gen int
+	}
+
+	Path []string
 	// VarSelector represents field access for given var: v.x.y.field
 	VarSelector struct {
 		VarId    VarId
@@ -65,11 +77,9 @@ type (
 	}
 	// NoOp artificial operation which simplify execution graph construction
 	NoOp struct{}
-	// AssignVarOp "primitive" operation: var1 = var2
-	AssignVarOp struct{ FromVarId, ToVarId VarId }
-	// ChangeVarGenOp "primitive" operation: var = next(var) / prev(var)
-	ChangeVarGenOp struct {
-		VarId     VarId
-		GenChange int
+	// AssignVarOp "primitive" operation: var1 = var2 when GenChange = 0, or var1 = next(var2) / prev(var2) if GenChange = +-1
+	AssignVarOp struct {
+		FromVarId, ToVarId VarId
+		GenChange          GenChangeType
 	}
 )

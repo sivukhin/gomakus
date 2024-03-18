@@ -4,7 +4,7 @@ import (
 	"slices"
 	"sort"
 
-	"go-append-check/utils"
+	"gomakus/utils"
 )
 
 type factorizationEntry struct {
