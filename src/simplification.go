@@ -8,7 +8,7 @@ type SimplificationContext struct {
 	Funcs map[FuncId]FuncSpec
 }
 
-func SimplifyExecution(context SimplificationContext, execution Execution) Execution {
+func SelectAssignOps(context SimplificationContext, execution Execution) []AssignSelectorOp {
 	assigns := make([]AssignSelectorOp, 0)
 	for _, transitions := range execution.Transitions {
 		for _, transition := range transitions {
@@ -31,19 +31,22 @@ func SimplifyExecution(context SimplificationContext, execution Execution) Execu
 			}
 		}
 	}
+	return assigns
+}
 
+func SimplifyExecution(context SimplificationContext, execution Execution) (Execution, map[ExecutionPoint]ExecutionPoint) {
+	assigns := SelectAssignOps(context, execution)
 	simplification := &simplificationContext{
 		funcs:                    context.Funcs,
 		factorization:            FactorizeAssignments(assigns),
 		varSelectorCollection:    make(varSelectorCollection),
 		executionPointCollection: make(executionPointCollection),
 		visited:                  make(map[ExecutionPoint]struct{}),
+		simplifiedToOriginal:     make(map[ExecutionPoint]ExecutionPoint),
 	}
-	builder := NewExecutionBuilder(execution.SourceCodeReferences.Enabled)
-	builder.AssignRef(builder.CurrentPoint, execution.SourceCodeReferences.References[execution.RootPoint])
-
+	builder := NewExecutionBuilder(nil)
 	simplification.simplifyExecution(builder, execution, execution.RootPoint)
-	return builder.Build()
+	return builder.Build(), simplification.simplifiedToOriginal
 }
 
 type simplificationContext struct {
@@ -52,6 +55,7 @@ type simplificationContext struct {
 	varSelectorCollection    varSelectorCollection
 	executionPointCollection executionPointCollection
 	visited                  map[ExecutionPoint]struct{}
+	simplifiedToOriginal     map[ExecutionPoint]ExecutionPoint
 }
 
 func (c *simplificationContext) simplifyExecution(builder ExecutionBuilder, execution Execution, point ExecutionPoint) {
@@ -60,9 +64,7 @@ func (c *simplificationContext) simplifyExecution(builder ExecutionBuilder, exec
 		return
 	}
 	c.visited[point] = struct{}{}
-
-	ref := execution.SourceCodeReferences.References[point]
-	builder.AssignRef(builder.CurrentPoint, ref)
+	c.simplifiedToOriginal[builder.CurrentPoint] = point
 
 	transitions, ok := execution.Transitions[point]
 	if !ok {
@@ -73,13 +75,35 @@ func (c *simplificationContext) simplifyExecution(builder ExecutionBuilder, exec
 		switch operation := transition.Operation.(type) {
 		case AssignVarOp:
 		case AssignSelectorOp:
-			fromSelectors := c.factorization.FactorizeSelector(operation.FromSelector)
-			toSelectors := c.factorization.FactorizeSelector(operation.ToSelector)
-			utils.Assertf(len(fromSelectors) == len(toSelectors), "inconsistent assignment operator factorization: from=%+v, to=%+v", fromSelectors, toSelectors)
-			for i := range fromSelectors {
-				fromVar := c.varSelectorCollection.IntroduceVarOrGet(fromSelectors[i])
-				toVar := c.varSelectorCollection.IntroduceVarOrGet(toSelectors[i])
-				builder = builder.ApplyNextWithRef(AssignVarOp{FromVarId: fromVar, ToVarId: toVar}, ref)
+			if operation.FromSelector.VarId == BlankVarId && operation.ToSelector.VarId != BlankVarId {
+				toSelectors := c.factorization.FactorizeSelector(operation.ToSelector)
+				for i := range toSelectors {
+					fromVar := c.varSelectorCollection.IntroduceVarOrGet(VarSelector{VarId: BlankVarId})
+					toVar := c.varSelectorCollection.IntroduceVarOrGet(toSelectors[i])
+
+					builder = builder.ApplyNext(AssignVarOp{FromVarId: fromVar, ToVarId: toVar})
+					c.simplifiedToOriginal[builder.CurrentPoint] = point
+				}
+			} else if operation.FromSelector.VarId != BlankVarId && operation.ToSelector.VarId == BlankVarId {
+				fromSelectors := c.factorization.FactorizeSelector(operation.FromSelector)
+				for i := range fromSelectors {
+					fromVar := c.varSelectorCollection.IntroduceVarOrGet(fromSelectors[i])
+					toVar := c.varSelectorCollection.IntroduceVarOrGet(VarSelector{VarId: BlankVarId})
+
+					builder = builder.ApplyNext(AssignVarOp{FromVarId: fromVar, ToVarId: toVar})
+					c.simplifiedToOriginal[builder.CurrentPoint] = point
+				}
+			} else {
+				fromSelectors := c.factorization.FactorizeSelector(operation.FromSelector)
+				toSelectors := c.factorization.FactorizeSelector(operation.ToSelector)
+				utils.Assertf(len(fromSelectors) == len(toSelectors), "inconsistent assignment operator factorization: from=%+v, to=%+v", fromSelectors, toSelectors)
+				for i := range fromSelectors {
+					fromVar := c.varSelectorCollection.IntroduceVarOrGet(fromSelectors[i])
+					toVar := c.varSelectorCollection.IntroduceVarOrGet(toSelectors[i])
+
+					builder = builder.ApplyNext(AssignVarOp{FromVarId: fromVar, ToVarId: toVar})
+					c.simplifiedToOriginal[builder.CurrentPoint] = point
+				}
 			}
 		case UseSelectorsOp:
 			if funcSpec, ok := c.funcs[operation.FuncId]; ok {
@@ -102,12 +126,14 @@ func (c *simplificationContext) simplifyExecution(builder ExecutionBuilder, exec
 						}
 						fromVar := c.varSelectorCollection.IntroduceVarOrGet(fromSelector)
 						toVar := c.varSelectorCollection.IntroduceVarOrGet(toSelector)
-						builder = builder.ApplyNextWithRef(AssignVarOp{FromVarId: fromVar, ToVarId: toVar, GenChange: funcInputRef.GenChange}, ref)
+						builder = builder.ApplyNext(AssignVarOp{FromVarId: fromVar, ToVarId: toVar, GenChange: funcInputRef.GenChange})
+						c.simplifiedToOriginal[builder.CurrentPoint] = point
 					}
 				}
 			} else {
 				for _, output := range operation.Outputs {
-					builder = builder.ApplyNextWithRef(AssignVarOp{FromVarId: output, ToVarId: BlankVarId}, ref)
+					builder = builder.ApplyNext(AssignVarOp{FromVarId: output, ToVarId: BlankVarId})
+					c.simplifiedToOriginal[builder.CurrentPoint] = point
 				}
 			}
 		}

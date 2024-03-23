@@ -5,7 +5,7 @@ import (
 )
 
 func TestBuilderApi(t *testing.T) {
-	builder := NewExecutionBuilder(false)
+	builder := NewExecutionBuilder(nil)
 	builder = builder.ApplyNext(AssignVarOp{ToVarId: 0, FromVarId: BlankVarId})
 	builder = builder.ApplyNext(AssignVarOp{ToVarId: 1, FromVarId: BlankVarId})
 	afterStateId := builder.AcquirePoint()

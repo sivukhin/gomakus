@@ -37,9 +37,9 @@ func FactorizeAssignments(assigns []AssignSelectorOp) FactorizationRules {
 		workspace: workspace[:0],
 	}
 	for _, assign := range assigns {
-		factorizeAssigment(context, assign.FromSelector.VarId, nil)
+		factorizeAssigment(context, assign.FromSelector.VarId, Path{})
 		factorizeAssigment(context, assign.FromSelector.VarId, assign.FromSelector.Selector)
-		factorizeAssigment(context, assign.ToSelector.VarId, nil)
+		factorizeAssigment(context, assign.ToSelector.VarId, Path{})
 		factorizeAssigment(context, assign.ToSelector.VarId, assign.ToSelector.Selector)
 	}
 	for varId, paths := range context.rules {
@@ -56,10 +56,9 @@ func FactorizeAssignments(assigns []AssignSelectorOp) FactorizationRules {
 }
 
 func factorizeAssigment(context factorizationContext, varId VarId, path Path) {
-	if len(path) > 2 {
-		panic(123)
+	if varId == BlankVarId {
+		return
 	}
-
 	pathBytes := joinTo(context.workspace, path, ",")
 	entry := factorizationEntry{varId: varId, path: string(pathBytes)}
 	if _, ok := context.analyzed[entry]; ok {
@@ -68,13 +67,6 @@ func factorizeAssigment(context factorizationContext, varId VarId, path Path) {
 	context.rules[varId] = append(context.rules[varId], path)
 	context.analyzed[entry] = struct{}{}
 
-	for _, target := range context.targets[varId] {
-		if !hasPrefix(path, target.FromSelector.Selector) {
-			continue
-		}
-		targetPath := append(append([]string{}, target.ToSelector.Selector...), path[len(target.FromSelector.Selector):]...)
-		factorizeAssigment(context, target.ToSelector.VarId, targetPath)
-	}
 	for _, source := range context.sources[varId] {
 		if !hasPrefix(path, source.ToSelector.Selector) {
 			continue

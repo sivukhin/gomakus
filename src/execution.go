@@ -3,7 +3,6 @@ package src
 import (
 	"fmt"
 	"go/token"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -24,8 +23,8 @@ type (
 		SourceCodeReferences SourceCodeReferences
 	}
 	SourceCodeReferences struct {
-		Enabled    bool
-		References map[ExecutionPoint]token.Position
+		Fset       *token.FileSet
+		References map[ExecutionPoint]token.Pos
 	}
 )
 
@@ -42,28 +41,23 @@ func (v VarEmbed) String() string {
 	return strings.Join(append(append([]string{}, v.Path...), v.VarSelector.String()), ":")
 }
 
+func (e ExecutionTransition) String() string {
+	return fmt.Sprintf("%v:%T%+v ", e.ToPoint, e.Operation, e.Operation)
+}
+
 func (e Execution) String() string {
 	var s strings.Builder
 	s.WriteString(fmt.Sprintf("execution (%v):\n", e.RootPoint))
-	points := make([]ExecutionPoint, 0)
-	for point := range e.Transitions {
-		points = append(points, point)
-	}
-	sort.Slice(points, func(i, j int) bool {
-		refI := e.SourceCodeReferences.References[points[i]]
-		refJ := e.SourceCodeReferences.References[points[j]]
-		if refI.Filename != refJ.Filename {
-			return refI.Filename < refJ.Filename
-		} else if refI.Line != refJ.Line {
-			return refI.Line < refJ.Line
-		} else if refI.Column != refJ.Column {
-			return refI.Column < refJ.Column
-		} else {
-			return points[i] < points[j]
+	edges := make(map[ExecutionPoint][]ExecutionPoint)
+	for point, transitions := range e.Transitions {
+		for _, transition := range transitions {
+			edges[point] = append(edges[point], transition.ToPoint)
 		}
-	})
+	}
+	points := TopologyOrder(e.RootPoint, func(v ExecutionPoint) []ExecutionPoint { return edges[v] })
 	for _, point := range points {
-		if ref, ok := e.SourceCodeReferences.References[point]; ok {
+		if pos, ok := e.SourceCodeReferences.References[point]; e.SourceCodeReferences.Fset != nil && ok {
+			ref := e.SourceCodeReferences.Fset.Position(pos)
 			s.WriteString(fmt.Sprintf("%v(%v[%v])::\t", ref.Filename, ref.Line, ref.Column))
 		}
 		s.WriteString(fmt.Sprintf("  %v: ", point))

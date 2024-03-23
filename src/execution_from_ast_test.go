@@ -91,7 +91,7 @@ func TestSelectorFunc(t *testing.T) {
 	fset, funcDecl := utils.MustGenFunc(`func f(u *User) {
 		u.Name = g()
 }`)
-	execution := executionFromFunc(NewScopes(map[string]FuncId{
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
 		SliceFuncName:  SliceFuncId,
 		AppendFuncName: AppendFuncId,
 		"g":            -3,
@@ -110,7 +110,7 @@ func TestSelectors(t *testing.T) {
 	}
 	return user.Meta.Phone
 }`)
-	execution := executionFromFunc(NewScopes(map[string]FuncId{
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
 		SliceFuncName:  SliceFuncId,
 		AppendFuncName: AppendFuncId,
 	}), fset, funcDecl)
@@ -123,7 +123,20 @@ func TestMultiAssignment(t *testing.T) {
 	a, b = f2()
 	return a + b
 }`)
-	execution := executionFromFunc(NewScopes(map[string]FuncId{
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
+		SliceFuncName:  SliceFuncId,
+		AppendFuncName: AppendFuncId,
+	}), fset, funcDecl)
+	t.Logf("%v", execution)
+}
+
+func TestNakedReturn(t *testing.T) {
+	fset, funcDecl := utils.MustGenFunc(`func f() (a int, b string) {
+	a = 1
+	b = "hi"
+	return
+}`)
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
 		SliceFuncName:  SliceFuncId,
 		AppendFuncName: AppendFuncId,
 	}), fset, funcDecl)
@@ -143,7 +156,7 @@ func TestBlocks(t *testing.T) {
 	}
 	return result
 }`)
-	execution := executionFromFunc(NewScopes(map[string]FuncId{
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
 		SliceFuncName:  SliceFuncId,
 		AppendFuncName: AppendFuncId,
 	}), fset, funcDecl)
@@ -160,7 +173,7 @@ func TestGqlgenBug(t *testing.T) {
 	}
 	return ret
 }`)
-	execution := executionFromFunc(NewScopes(map[string]FuncId{
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
 		SliceFuncName:  SliceFuncId,
 		AppendFuncName: AppendFuncId,
 	}), fset, funcDecl)
@@ -226,7 +239,7 @@ func TestTheinegoBug(t *testing.T) {
 		}
 	}
 }`)
-	execution := executionFromFunc(NewScopes(map[string]FuncId{
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
 		SliceFuncName:  SliceFuncId,
 		AppendFuncName: AppendFuncId,
 	}), fset, funcDecl)

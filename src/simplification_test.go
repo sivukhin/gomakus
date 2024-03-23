@@ -16,11 +16,11 @@ func TestSimplification(t *testing.T) {
 	}
 	return ret
 }`)
-	execution := executionFromFunc(NewScopes(map[string]FuncId{
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
 		SliceFuncName:  SliceFuncId,
 		AppendFuncName: AppendFuncId,
 	}), fset, funcDecl)
 	t.Logf("%v", execution)
-	simplified := SimplifyExecution(SimplificationContext{Funcs: DefaultFuncSpecCollection}, execution)
+	simplified, _ := SimplifyExecution(SimplificationContext{Funcs: DefaultFuncSpecCollection}, execution)
 	t.Log(simplified)
 }

@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"gomakus/utils"
 )
 
 func TestFactorizeAssignments(t *testing.T) {
@@ -37,4 +39,34 @@ func TestFactorizeAssignments(t *testing.T) {
 		3: {{}},
 		4: {{}},
 	}, rules)
+}
+
+func TestFactorizationHard(t *testing.T) {
+	fset, funcDecl := utils.MustGenFunc(`func executionFromExpr(
+	builder ExecutionBuilder,
+	scopes Scopes,
+	fset *token.FileSet,
+	expr ast.Expr,
+	exprOutputs int,
+) (ExecutionBuilder, []VarComposition) {
+	blanks := make([]VarComposition, exprOutputs)
+
+	switch e := expr.(type) {
+	case *ast.CallExpr:
+		var args []ast.Expr
+		call := e.(*ast.CallExpr)
+		args = call.Args
+	}
+	panic(fmt.Errorf("unexpected expression"))
+}
+`)
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
+		SliceFuncName:  SliceFuncId,
+		AppendFuncName: AppendFuncId,
+	}), fset, funcDecl)
+	t.Logf("%v", execution)
+	assigns := SelectAssignOps(SimplificationContext{Funcs: DefaultFuncSpecCollection}, execution)
+	t.Logf("%+v", assigns)
+	factorization := FactorizeAssignments(assigns)
+	t.Log(factorization)
 }

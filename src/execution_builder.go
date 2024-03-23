@@ -12,7 +12,7 @@ type ExecutionBuilder struct {
 	execution    *Execution
 }
 
-func NewExecutionBuilder(sourceCodeReferencesEnabled bool) ExecutionBuilder {
+func NewExecutionBuilder(fset *token.FileSet) ExecutionBuilder {
 	rootPoint := ExecutionPoint(0)
 	lastPoint := ExecutionPoint(0)
 	transitions := make(map[ExecutionPoint][]ExecutionTransition)
@@ -23,8 +23,8 @@ func NewExecutionBuilder(sourceCodeReferencesEnabled bool) ExecutionBuilder {
 			RootPoint:   rootPoint,
 			Transitions: transitions,
 			SourceCodeReferences: SourceCodeReferences{
-				Enabled:    sourceCodeReferencesEnabled,
-				References: make(map[ExecutionPoint]token.Position),
+				Fset:       fset,
+				References: make(map[ExecutionPoint]token.Pos),
 			},
 		},
 	}
@@ -32,8 +32,8 @@ func NewExecutionBuilder(sourceCodeReferencesEnabled bool) ExecutionBuilder {
 
 func (b ExecutionBuilder) Build() Execution { return *b.execution }
 
-func (b ExecutionBuilder) AssignRef(point ExecutionPoint, position token.Position) {
-	if (*b.execution).SourceCodeReferences.Enabled {
+func (b ExecutionBuilder) AssignRef(point ExecutionPoint, position token.Pos) {
+	if (*b.execution).SourceCodeReferences.Fset != nil {
 		(*b.execution).SourceCodeReferences.References[point] = position
 	}
 }
@@ -47,7 +47,7 @@ func (b ExecutionBuilder) AcquirePoint() ExecutionBuilder {
 	}
 }
 
-func (b ExecutionBuilder) AcquirePointWithRef(position token.Position) ExecutionBuilder {
+func (b ExecutionBuilder) AcquirePointWithRef(position token.Pos) ExecutionBuilder {
 	*b.lastPoint += 1
 	b.AssignRef(*b.lastPoint, position)
 	return ExecutionBuilder{
@@ -76,7 +76,7 @@ func (b ExecutionBuilder) ApplyNext(op Operation) ExecutionBuilder {
 	}
 }
 
-func (b ExecutionBuilder) ApplyNextWithRef(op Operation, position token.Position) ExecutionBuilder {
+func (b ExecutionBuilder) ApplyNextWithRef(op Operation, position token.Pos) ExecutionBuilder {
 	next := b.AcquirePointWithRef(position)
 	b.connect(ExecutionTransition{ToPoint: next.CurrentPoint, Operation: op})
 	return ExecutionBuilder{

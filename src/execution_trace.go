@@ -38,19 +38,40 @@ func generateTraces(
 }
 
 type ValidationWarning struct {
-	Trace            ExecutionTrace
-	ExecutionPoint   ExecutionPoint
-	ConflictOrigin   VarId
-	ConflictVariable VarId
+	Trace          ExecutionTrace
+	ExecutionPoint ExecutionPoint
+}
+
+func ValidateExecution(funcs map[FuncId]FuncSpec, execution Execution) []ValidationWarning {
+	simplified, simplifiedToOriginal := SimplifyExecution(SimplificationContext{Funcs: funcs}, execution)
+	traces := GenerateTraces(simplified, 2)
+	warnedExecutionPoints := make(map[ExecutionPoint]struct{})
+	var warnings []ValidationWarning
+	for _, trace := range traces {
+		for _, warning := range ValidateTrace(trace) {
+			if _, ok := warnedExecutionPoints[warning.ExecutionPoint]; ok {
+				continue
+			}
+			warnedExecutionPoints[warning.ExecutionPoint] = struct{}{}
+			warnings = append(warnings, ValidationWarning{
+				Trace:          trace,
+				ExecutionPoint: simplifiedToOriginal[warning.ExecutionPoint],
+			})
+		}
+	}
+	return warnings
 }
 
 func ValidateTrace(trace ExecutionTrace) []ValidationWarning {
 	originLatestGen := make(map[VarId]int, 0)
 	variableGen := make(map[VarId]VarGen)
-	errs := make([]ValidationWarning, 0)
+	warnings := make([]ValidationWarning, 0)
 	for _, transition := range trace {
 		switch statement := transition.Operation.(type) {
 		case AssignVarOp:
+			if statement.FromVarId == BlankVarId {
+				continue
+			}
 			sourceGen, ok := variableGen[statement.FromVarId]
 			var targetGen VarGen
 			if !ok {
@@ -67,13 +88,11 @@ func ValidateTrace(trace ExecutionTrace) []ValidationWarning {
 			latestGen, ok := originLatestGen[targetGen.Id]
 			if ok && statement.GenChange == NextGen && targetGen.Gen <= latestGen {
 				err := ValidationWarning{
-					Trace:            trace,
-					ExecutionPoint:   transition.ToPoint,
-					ConflictOrigin:   targetGen.Id,
-					ConflictVariable: statement.FromVarId,
+					Trace:          trace,
+					ExecutionPoint: transition.ToPoint,
 				}
-				errs = append(errs, err)
-			} else if !ok || latestGen < targetGen.Gen {
+				warnings = append(warnings, err)
+			} else if !ok || targetGen.Gen > latestGen {
 				originLatestGen[targetGen.Id] = targetGen.Gen
 			}
 			variableGen[statement.ToVarId] = targetGen
@@ -83,5 +102,5 @@ func ValidateTrace(trace ExecutionTrace) []ValidationWarning {
 			panic(fmt.Errorf("unexpected execution statement type(%T): %#v", transition, transition))
 		}
 	}
-	return errs
+	return warnings
 }
