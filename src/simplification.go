@@ -23,7 +23,8 @@ func SelectAssignOps(context SimplificationContext, execution Execution) []Assig
 				for _, output := range funcSpec.Outputs {
 					for i, outputComponent := range output {
 						assigns = append(assigns, AssignSelectorOp{
-							FromSelector: funcSpec.Inputs[outputComponent.InputRef.ArgIndex][outputComponent.InputRef.SelectorIndex],
+							// todo (sivukhin, 2024-03-23): very dirty hack!
+							FromSelector: op.Inputs[outputComponent.InputRef.ArgIndex][outputComponent.InputRef.SelectorIndex].VarSelector,
 							ToSelector:   VarSelector{VarId: op.Outputs[i], Selector: outputComponent.OutputPath},
 						})
 					}
@@ -70,10 +71,11 @@ func (c *simplificationContext) simplifyExecution(builder ExecutionBuilder, exec
 	if !ok {
 		return
 	}
+	original := builder
 	for _, transition := range transitions {
+		builder = original
 		toPoint := c.executionPointCollection.AcquireOrGet(builder, transition.ToPoint)
 		switch operation := transition.Operation.(type) {
-		case AssignVarOp:
 		case AssignSelectorOp:
 			if operation.FromSelector.VarId == BlankVarId && operation.ToSelector.VarId != BlankVarId {
 				toSelectors := c.factorization.FactorizeSelector(operation.ToSelector)
@@ -82,7 +84,7 @@ func (c *simplificationContext) simplifyExecution(builder ExecutionBuilder, exec
 					toVar := c.varSelectorCollection.IntroduceVarOrGet(toSelectors[i])
 
 					builder = builder.ApplyNext(AssignVarOp{FromVarId: fromVar, ToVarId: toVar})
-					c.simplifiedToOriginal[builder.CurrentPoint] = point
+					c.simplifiedToOriginal[builder.CurrentPoint] = transition.ToPoint
 				}
 			} else if operation.FromSelector.VarId != BlankVarId && operation.ToSelector.VarId == BlankVarId {
 				fromSelectors := c.factorization.FactorizeSelector(operation.FromSelector)
@@ -91,7 +93,7 @@ func (c *simplificationContext) simplifyExecution(builder ExecutionBuilder, exec
 					toVar := c.varSelectorCollection.IntroduceVarOrGet(VarSelector{VarId: BlankVarId})
 
 					builder = builder.ApplyNext(AssignVarOp{FromVarId: fromVar, ToVarId: toVar})
-					c.simplifiedToOriginal[builder.CurrentPoint] = point
+					c.simplifiedToOriginal[builder.CurrentPoint] = transition.ToPoint
 				}
 			} else {
 				fromSelectors := c.factorization.FactorizeSelector(operation.FromSelector)
@@ -102,7 +104,7 @@ func (c *simplificationContext) simplifyExecution(builder ExecutionBuilder, exec
 					toVar := c.varSelectorCollection.IntroduceVarOrGet(toSelectors[i])
 
 					builder = builder.ApplyNext(AssignVarOp{FromVarId: fromVar, ToVarId: toVar})
-					c.simplifiedToOriginal[builder.CurrentPoint] = point
+					c.simplifiedToOriginal[builder.CurrentPoint] = transition.ToPoint
 				}
 			}
 		case UseSelectorsOp:
@@ -127,13 +129,13 @@ func (c *simplificationContext) simplifyExecution(builder ExecutionBuilder, exec
 						fromVar := c.varSelectorCollection.IntroduceVarOrGet(fromSelector)
 						toVar := c.varSelectorCollection.IntroduceVarOrGet(toSelector)
 						builder = builder.ApplyNext(AssignVarOp{FromVarId: fromVar, ToVarId: toVar, GenChange: funcInputRef.GenChange})
-						c.simplifiedToOriginal[builder.CurrentPoint] = point
+						c.simplifiedToOriginal[builder.CurrentPoint] = transition.ToPoint
 					}
 				}
 			} else {
 				for _, output := range operation.Outputs {
 					builder = builder.ApplyNext(AssignVarOp{FromVarId: output, ToVarId: BlankVarId})
-					c.simplifiedToOriginal[builder.CurrentPoint] = point
+					c.simplifiedToOriginal[builder.CurrentPoint] = transition.ToPoint
 				}
 			}
 		}

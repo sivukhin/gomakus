@@ -92,6 +92,9 @@ func executionFromExpr(
 	exprOutputs int,
 ) (ExecutionBuilder, []VarComposition) {
 	blanks := make([]VarComposition, exprOutputs)
+	for i := range blanks {
+		blanks[i] = VarComposition{{VarSelector: VarSelector{VarId: BlankVarId}}}
+	}
 
 	switch e := expr.(type) {
 	case *ast.ParenExpr:
@@ -110,22 +113,26 @@ func executionFromExpr(
 		}
 		return builder, blanks
 	case *ast.CompositeLit:
-		var varCompositions VarComposition
-		for _, el := range e.Elts {
-			keyValueExp, ok := el.(*ast.KeyValueExpr)
-			if !ok {
-				continue
-			}
-			keyIdent, ok := keyValueExp.Key.(*ast.Ident)
-			if !ok {
-				continue
-			}
-			var nestedVarComposition []VarComposition
-			builder, nestedVarComposition = executionFromExpr(builder, scopes, fset, keyValueExp.Value, 1)
-			utils.Assertf(len(nestedVarComposition) == 1, "composite lit key must be assigned to single value")
-			varCompositions = append(varCompositions, nestedVarComposition[0].Embed(keyIdent.Name)...)
-		}
-		return builder, []VarComposition{varCompositions}
+		return builder, blanks
+		//if _, ok := e.Type.(*ast.ArrayType); ok {
+		//	return builder, blanks
+		//}
+		//var varCompositions VarComposition
+		//for _, el := range e.Elts {
+		//	keyValueExp, ok := el.(*ast.KeyValueExpr)
+		//	if !ok {
+		//		continue
+		//	}
+		//	keyIdent, ok := keyValueExp.Key.(*ast.Ident)
+		//	if !ok {
+		//		continue
+		//	}
+		//	var nestedVarComposition []VarComposition
+		//	builder, nestedVarComposition = executionFromExpr(builder, scopes, fset, keyValueExp.Value, 1)
+		//	utils.Assertf(len(nestedVarComposition) == 1, "composite lit key must be assigned to single value")
+		//	varCompositions = append(varCompositions, nestedVarComposition[0].Embed(keyIdent.Name)...)
+		//}
+		//return builder, []VarComposition{varCompositions}
 	case *ast.CallExpr, *ast.SliceExpr:
 		var funcId FuncId
 		var args []ast.Expr
@@ -282,8 +289,7 @@ func executionFromStmt(
 				varId := scopes.CreateVar(name)
 				builder = executionFromVarComposition(fset, s, builder, VarSelector{VarId: varId}, varCompositions[i])
 			}
-		} else {
-			assign := stmt.(*ast.AssignStmt)
+		} else if assign, ok := stmt.(*ast.AssignStmt); ok {
 			utils.Assertf(len(assign.Rhs) == 1 || len(assign.Lhs) == len(assign.Rhs), "assign initial inputs/outputs count mismatch: %v", fset.Position(s.Pos()))
 			valueOutputs := len(assign.Lhs)
 			if len(assign.Lhs) == len(assign.Rhs) {

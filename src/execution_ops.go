@@ -9,10 +9,7 @@ const (
 type (
 	FuncId        int
 	GenChangeType int
-	VarGen        struct {
-		Id  VarId
-		Gen int
-	}
+	VarGen        struct{ Id, Gen int }
 
 	Path []string
 	// VarSelector represents field access for given var: v.x.y.field

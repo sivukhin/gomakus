@@ -2,8 +2,6 @@ package src
 
 import (
 	"go/token"
-
-	"gomakus/utils"
 )
 
 type ExecutionBuilder struct {
@@ -87,6 +85,5 @@ func (b ExecutionBuilder) ApplyNextWithRef(op Operation, position token.Pos) Exe
 }
 
 func (b ExecutionBuilder) connect(transition ExecutionTransition) {
-	utils.Assertf(b.CurrentPoint != transition.ToPoint, "connection points must be different: %v == %v", b.CurrentPoint, transition.ToPoint)
 	(*b.execution).Transitions[b.CurrentPoint] = append((*b.execution).Transitions[b.CurrentPoint], transition)
 }

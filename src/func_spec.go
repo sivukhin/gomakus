@@ -68,7 +68,7 @@ var (
 		FuncMultiOutput{{{InputRef: FuncInputRef{ArgIndex: 0}, GenChange: PrevGen}}},
 	)
 	AppendFuncSpec = NewFuncSpec(
-		FuncMultiInput{{{VarId: 0}}},
+		FuncMultiInput{{{VarId: 0}}, {{VarId: BlankVarId}}},
 		FuncMultiOutput{{{InputRef: FuncInputRef{ArgIndex: 0}, GenChange: NextGen}}},
 	)
 

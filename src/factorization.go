@@ -24,6 +24,13 @@ func FactorizeAssignments(assigns []AssignSelectorOp) FactorizationRules {
 	targets := make(map[VarId][]AssignSelectorOp)
 	sources := make(map[VarId][]AssignSelectorOp)
 	for _, assign := range assigns {
+		if assign.FromSelector.VarId == BlankVarId || assign.ToSelector.VarId == BlankVarId {
+			continue
+		}
+		// todo (sivukhin, 2024-03-23): simple hack to forbid trivial cycles
+		if assign.FromSelector.VarId == assign.ToSelector.VarId {
+			continue
+		}
 		targets[assign.FromSelector.VarId] = append(targets[assign.FromSelector.VarId], assign)
 		sources[assign.ToSelector.VarId] = append(sources[assign.ToSelector.VarId], assign)
 	}
@@ -73,6 +80,13 @@ func factorizeAssigment(context factorizationContext, varId VarId, path Path) {
 		}
 		targetPath := append(append([]string{}, source.FromSelector.Selector...), path[len(source.ToSelector.Selector):]...)
 		factorizeAssigment(context, source.FromSelector.VarId, targetPath)
+	}
+	for _, target := range context.targets[varId] {
+		if !hasPrefix(path, target.FromSelector.Selector) {
+			continue
+		}
+		targetPath := append(append([]string{}, target.ToSelector.Selector...), path[len(target.FromSelector.Selector):]...)
+		factorizeAssigment(context, target.ToSelector.VarId, targetPath)
 	}
 }
 

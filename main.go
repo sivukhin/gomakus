@@ -36,6 +36,7 @@ func main() {
 					src.SliceFuncName:  src.SliceFuncId,
 					src.AppendFuncName: src.AppendFuncId,
 				}), pkg.Fset, funcDecl)
+				_ = execution
 				warnings := src.ValidateExecution(src.DefaultFuncSpecCollection, execution)
 				for _, warning := range warnings {
 					pos, ok := execution.SourceCodeReferences.References[warning.ExecutionPoint]

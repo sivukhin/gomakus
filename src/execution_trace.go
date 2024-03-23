@@ -3,9 +3,18 @@ package src
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type ExecutionTrace []ExecutionTransition
+
+func (t ExecutionTrace) String() string {
+	var s strings.Builder
+	for _, e := range t {
+		s.WriteString(fmt.Sprintf("%v\n", e))
+	}
+	return s.String()
+}
 
 func GenerateTraces(execution Execution, repeatLimit int) []ExecutionTrace {
 	visits := make(map[ExecutionPoint]int)
@@ -63,23 +72,27 @@ func ValidateExecution(funcs map[FuncId]FuncSpec, execution Execution) []Validat
 }
 
 func ValidateTrace(trace ExecutionTrace) []ValidationWarning {
-	originLatestGen := make(map[VarId]int, 0)
+	originLatestGen := make(map[int]int, 0)
 	variableGen := make(map[VarId]VarGen)
 	warnings := make([]ValidationWarning, 0)
+	valueId := 0
 	for _, transition := range trace {
 		switch statement := transition.Operation.(type) {
 		case AssignVarOp:
-			if statement.FromVarId == BlankVarId {
+			if statement.ToVarId == BlankVarId {
 				continue
 			}
-			sourceGen, ok := variableGen[statement.FromVarId]
 			var targetGen VarGen
-			if !ok {
-				targetGen = VarGen{
-					Id:  statement.FromVarId,
-					Gen: 0,
-				}
+			if statement.FromVarId == BlankVarId {
+				targetGen = VarGen{Id: valueId}
+				valueId++
 			} else {
+				sourceGen, ok := variableGen[statement.FromVarId]
+				if !ok {
+					sourceGen = VarGen{Id: valueId}
+					variableGen[statement.FromVarId] = VarGen{Id: valueId}
+					valueId++
+				}
 				targetGen = VarGen{
 					Id:  sourceGen.Id,
 					Gen: sourceGen.Gen + int(statement.GenChange),

@@ -180,6 +180,18 @@ func TestGqlgenBug(t *testing.T) {
 	t.Logf("%v", execution)
 }
 
+func TestArrayLiteral(t *testing.T) {
+	fset, funcDecl := utils.MustGenFunc(`func parseUnnestedKeyFieldSet() []string {
+	x := append([]string{}, []string{}...)
+	return x
+}`)
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
+		SliceFuncName:  SliceFuncId,
+		AppendFuncName: AppendFuncId,
+	}), fset, funcDecl)
+	t.Logf("%v", execution)
+}
+
 func TestTheinegoBug(t *testing.T) {
 	fset, funcDecl := utils.MustGenFunc(`func (s *Store[K, V]) processDeque(shard *Shard[K, V]) {
 	if shard.qlen <= int(shard.qsize) {
@@ -243,5 +255,30 @@ func TestTheinegoBug(t *testing.T) {
 		SliceFuncName:  SliceFuncId,
 		AppendFuncName: AppendFuncId,
 	}), fset, funcDecl)
+	for _, warning := range ValidateExecution(DefaultFuncSpecCollection, execution) {
+		t.Logf("%v", execution.SourceCodeReferences.Fset.Position(execution.SourceCodeReferences.References[warning.ExecutionPoint]))
+	}
+	t.Logf("%v", execution)
+}
+
+func TestName(t *testing.T) {
+	fset, funcDecl := utils.MustGenFunc(`func (p VarEmbed) Select(name string) (VarEmbed, bool) {
+	if len(p.Path) > 0 && p.Path[0] == name {
+		result := VarEmbed{Path: append([]string{}, p.Path[1:]...), VarSelector: p.VarSelector}
+		return result, true
+	} else if len(p.Path) == 0 && p.VarSelector.VarId != BlankVarId {
+		result := VarEmbed{VarSelector: VarSelector{
+			VarId:    p.VarSelector.VarId,
+			Selector: append(append([]string(nil), p.VarSelector.Selector...), name),
+		}}
+		return result, true
+	}
+	return VarEmbed{}, false
+}`)
+	execution := ExecutionFromFunc(NewScopes(map[string]FuncId{
+		SliceFuncName:  SliceFuncId,
+		AppendFuncName: AppendFuncId,
+	}), fset, funcDecl)
+	ValidateExecution(DefaultFuncSpecCollection, execution)
 	t.Logf("%v", execution)
 }
