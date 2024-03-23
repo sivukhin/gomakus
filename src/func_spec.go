@@ -1,7 +1,7 @@
 package src
 
 import (
-	"gomakus/utils"
+	"github.com/sivukhin/gomakus/utils"
 )
 
 // FuncSingleInput represents multiple components of single input value

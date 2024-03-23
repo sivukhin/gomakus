@@ -5,7 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 
-	"gomakus/utils"
+	"github.com/sivukhin/gomakus/utils"
 )
 
 // deconstructIf analyze chain of if / else if / else blocks and return flat list representing single chain (without analyzing nested conditions)

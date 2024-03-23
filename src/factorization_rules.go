@@ -4,7 +4,7 @@ import (
 	"slices"
 	"sort"
 
-	"gomakus/utils"
+	"github.com/sivukhin/gomakus/utils"
 )
 
 // FactorizationRules stores all useful paths for every variable in single function

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"sort"
 
-	"gomakus/utils"
+	"github.com/sivukhin/gomakus/utils"
 )
 
 type factorizationEntry struct {

@@ -3,7 +3,7 @@ package src
 import (
 	"testing"
 
-	"gomakus/utils"
+	"github.com/sivukhin/gomakus/utils"
 )
 
 func TestSimplification(t *testing.T) {

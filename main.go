@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"gomakus/src"
+	"github.com/sivukhin/gomakus/src"
 )
 
 func reportWarning(format string, analysisPath string, fileName, funcName string, line int) {

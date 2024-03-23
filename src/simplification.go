@@ -1,7 +1,7 @@
 package src
 
 import (
-	"gomakus/utils"
+	"github.com/sivukhin/gomakus/utils"
 )
 
 type SimplificationContext struct {

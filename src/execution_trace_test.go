@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"gomakus/utils"
+	"github.com/sivukhin/gomakus/utils"
 )
 
 func TestExecutionTrace(t *testing.T) {
