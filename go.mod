@@ -1,4 +1,4 @@
-module gomakus
+module github.com/sivukhin/gomakus
 
 go 1.21.0
 
